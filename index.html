@@ -1,0 +1,1241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Validity Trainer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* Layout: one working column — settings, question sheet (claim, working, verdict, then counterexample builder or proof puzzle, then model answer), notes folded at the foot. */
+:root {
+  --bg: #F3F5F9;
+  --sheet: #FFFFFF;
+  --ink: #1B2236;
+  --muted: #5B6680;
+  --rule: #C9D0DE;
+  --tint: #E8ECF4;
+  --navy: #2E3A5C;
+  --red: #B0303F;
+  --good: #2D7A55;
+  --good-bg: #E3F2EA;
+  --bad-bg: #F8E6E8;
+  --focus: #3D5BD9;
+  --f-display: "Spectral", "Cambria", Georgia, serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-logic: "STIX Two Text", "Cambria Math", "Cambria", "Times New Roman", serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151E; --sheet: #191F2C; --ink: #E5E9F2; --muted: #9AA5BE; --rule: #39425A; --tint: #222A3B;
+    --navy: #9DB0E6; --red: #EE7480; --good: #6CC79A; --good-bg: #183026; --bad-bg: #3A1D23; --focus: #8EA6FF;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11151E; --sheet: #191F2C; --ink: #E5E9F2; --muted: #9AA5BE; --rule: #39425A; --tint: #222A3B;
+  --navy: #9DB0E6; --red: #EE7480; --good: #6CC79A; --good-bg: #183026; --bad-bg: #3A1D23; --focus: #8EA6FF;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 16px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 48px;
+}
+.wrap { max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(1.9rem, 4.5vw, 2.6rem); line-height: 1.1; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+.lede { margin: 6px 0 0; color: var(--muted); max-width: 64ch; }
+.score { font-size: 0.9rem; color: var(--muted); display: flex; align-items: center; gap: 10px; font-variant-numeric: tabular-nums; }
+.score strong { color: var(--ink); font-weight: 600; }
+.linkish { background: none; border: 0; padding: 0; color: var(--navy); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+i { font-style: italic; font-family: var(--f-logic); }
+.logic { font-family: var(--f-logic); }
+
+.settings { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: flex-end; }
+.group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.group > .label { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.seg { display: inline-flex; flex-wrap: wrap; background: var(--tint); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label { padding: 7px 12px; border-radius: 8px; cursor: pointer; font-size: 0.92rem; color: var(--muted); user-select: none; }
+.seg input:checked + label { background: var(--sheet); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(20, 30, 60, 0.12); }
+.seg input:focus-visible + label { outline: 2px solid var(--focus); outline-offset: 1px; }
+.btn { font: inherit; font-weight: 600; border-radius: 10px; padding: 10px 18px; cursor: pointer; border: 1.5px solid transparent; }
+.btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.btn-primary { background: var(--navy); color: var(--sheet); }
+.btn-primary:hover { filter: brightness(1.08); }
+.btn-ghost { background: transparent; color: var(--navy); border-color: var(--rule); }
+.btn-ghost:hover { background: var(--tint); }
+.btn-small { padding: 6px 12px; font-size: 0.88rem; }
+.btn:disabled { opacity: 0.45; cursor: default; filter: none; }
+.btn.picked-right { background: var(--good-bg); color: var(--good); border-color: var(--good); opacity: 1; }
+.btn.picked-wrong { background: var(--bad-bg); color: var(--red); border-color: var(--red); opacity: 1; }
+
+.sheet { background: var(--sheet); border-radius: 16px; padding: clamp(18px, 4vw, 32px); box-shadow: 0 1px 3px rgba(20, 30, 60, 0.06), 0 8px 24px rgba(20, 30, 60, 0.05); display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.qhead { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; align-items: baseline; }
+.qhead h2 { font-family: var(--f-display); font-weight: 600; font-size: 1.45rem; margin: 0; }
+.tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.tag { font-size: 0.75rem; padding: 3px 9px; border-radius: 99px; background: var(--tint); color: var(--muted); }
+.qtext { display: flex; flex-direction: column; gap: 12px; align-items: center; text-align: center; }
+.qtext .lead { color: var(--muted); font-size: 0.98rem; }
+.claim { font-family: var(--f-logic); font-size: clamp(1.25rem, 3.2vw, 1.6rem); line-height: 1.5; max-width: 34em; text-wrap: balance; }
+.answers { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+.answers .btn { min-width: 210px; }
+.feedback { border-radius: 12px; padding: 12px 16px; font-weight: 500; }
+.feedback.right { background: var(--good-bg); color: var(--good); }
+.feedback.wrong { background: var(--bad-bg); color: var(--red); }
+.feedback i { font-family: var(--f-logic); }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; border-top: 1px solid var(--tint); padding-top: 18px; }
+.loading { text-align: center; color: var(--muted); padding: 28px 0; }
+
+details.work { border: 1px solid var(--tint); border-radius: 12px; padding: 0 14px; }
+details.work summary { cursor: pointer; padding: 10px 0; font-weight: 600; color: var(--navy); font-size: 0.95rem; }
+details.work summary:focus-visible, details.ref summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
+.pad { display: flex; flex-wrap: wrap; gap: 6px; }
+.pad button { font-family: var(--f-logic); font-size: 1.1rem; min-width: 40px; height: 38px; border-radius: 8px; border: 1px solid var(--rule); background: var(--sheet); color: var(--ink); cursor: pointer; }
+.pad button:hover { background: var(--tint); }
+.pad button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+textarea#work { width: 100%; min-height: 110px; font-family: var(--f-logic); font-size: 1.08rem; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--rule); background: var(--bg); color: var(--ink); resize: vertical; margin: 8px 0 12px; }
+textarea:focus-visible, input[type=text]:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.hint { color: var(--muted); font-size: 0.85rem; margin: 0 0 10px; }
+
+.panel { display: flex; flex-direction: column; gap: 16px; }
+.panel h3 { font-family: var(--f-display); font-weight: 600; font-size: 1.25rem; margin: 0; }
+.panel h4 { margin: 0; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; }
+.verdict { display: inline-block; font-weight: 600; padding: 6px 14px; border-radius: 99px; color: var(--sheet); }
+.verdict.yes { background: var(--navy); }
+.verdict.no { background: var(--red); }
+.p-note { color: var(--muted); font-size: 0.92rem; margin: 0; max-width: 72ch; }
+.box { background: var(--tint); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+/* counterexample builder */
+.letters { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 10px 12px; align-items: start; }
+.letters label { font-family: var(--f-logic); font-size: 1.25rem; padding-top: 6px; }
+.letters input { width: 100%; font-family: var(--f-logic); font-size: 1.15rem; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--rule); background: var(--sheet); color: var(--ink); }
+.letters .parsed { grid-column: 2; font-size: 0.85rem; color: var(--muted); margin-top: -6px; min-height: 1.2em; }
+.letters .parsed.err { color: var(--red); }
+.comps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.comp { background: var(--sheet); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; border: 1.5px solid transparent; }
+.comp.ok { border-color: var(--good); }
+.comp.no { border-color: var(--red); }
+.comp .ent { font-family: var(--f-logic); font-size: 1.15rem; }
+.comp .inst { font-size: 0.88rem; color: var(--muted); }
+.choice { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 0.92rem; }
+.choice label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.choice input { accent-color: var(--navy); width: 17px; height: 17px; }
+.valuation { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 0.9rem; }
+.tvbtn { font-family: var(--f-logic); font-size: 1.02rem; border: 1px solid var(--rule); background: var(--bg); color: var(--ink); border-radius: 8px; padding: 4px 10px; cursor: pointer; min-width: 64px; }
+.tvbtn[aria-pressed="true"] { background: var(--navy); color: var(--sheet); border-color: var(--navy); }
+.tvbtn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.cfb { font-size: 0.9rem; }
+.cfb.ok { color: var(--good); }
+.cfb.no { color: var(--red); }
+.cfb i { font-family: var(--f-logic); }
+
+/* proof puzzle */
+.puzzle { display: flex; flex-direction: column; gap: 12px; }
+.fixed { display: flex; flex-direction: column; gap: 4px; font-size: 0.98rem; }
+.fixed .ttl { font-weight: 600; }
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 760px) { .cols { grid-template-columns: minmax(0, 1fr); } }
+.colttl { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+.placed, .pool { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; min-height: 52px; }
+.placed { counter-reset: step; background: var(--sheet); border: 1.5px dashed var(--rule); border-radius: 12px; padding: 8px; }
+.placed:empty::before { content: "Tap steps on the right (or below) to add them here, in order."; color: var(--muted); font-size: 0.88rem; padding: 6px; }
+.stepbtn { width: 100%; text-align: left; font: inherit; font-size: 0.95rem; line-height: 1.45; background: var(--sheet); color: var(--ink); border: 1px solid var(--rule); border-radius: 10px; padding: 8px 10px; cursor: pointer; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; }
+.stepbtn:hover { border-color: var(--navy); }
+.stepbtn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.placed .stepbtn { background: var(--tint); border-color: transparent; }
+.placed .stepbtn::before { counter-increment: step; content: counter(step) "."; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pool .stepbtn::before { content: "+"; color: var(--navy); font-weight: 700; }
+.stepbtn.bad { border-color: var(--red); background: var(--bad-bg); }
+.stepbtn.good { border-color: var(--good); }
+.placed.solved .stepbtn { cursor: default; }
+.placed li.ind1 { margin-left: 0; } .placed li.ind2 { margin-left: 1.2em; } .placed li.ind3 { margin-left: 2.4em; } .placed li.ind4 { margin-left: 3.6em; }
+
+/* model answer */
+.proof { background: var(--tint); border-radius: 14px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.proof .ttl { font-weight: 600; }
+.proof ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.proof li.ind1 { padding-left: 1.3em; } .proof li.ind2 { padding-left: 2.6em; } .proof li.ind3 { padding-left: 3.9em; } .proof li.ind4 { padding-left: 5.2em; }
+.proof li.case { font-weight: 600; }
+.proof li.contra { color: var(--red); }
+.proof li.end, .proof .close { font-weight: 600; }
+.tablewrap { overflow-x: auto; }
+table.tt { border-collapse: collapse; font-family: var(--f-logic); font-size: 1rem; }
+table.tt th, table.tt td { padding: 5px 10px; text-align: center; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+table.tt th { font-weight: 400; vertical-align: bottom; }
+table.tt th small { display: block; font-family: var(--f-body); font-size: 0.72rem; color: var(--muted); }
+table.tt td.sep, table.tt th.sep { border-left: 1.5px solid var(--rule); }
+table.tt td.f { color: var(--muted); }
+table.tt tr.wit td { background: var(--bad-bg); }
+.inst-list { display: flex; flex-wrap: wrap; gap: 6px 22px; font-family: var(--f-logic); font-size: 1.15rem; }
+.complist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.complist li { display: grid; grid-template-columns: 1.6em minmax(0, 1fr); gap: 2px 6px; }
+.complist .mk { font-weight: 700; }
+.complist .mk.h { color: var(--good); } .complist .mk.f { color: var(--red); }
+.complist .e { font-family: var(--f-logic); font-size: 1.08rem; }
+.complist .r { grid-column: 2; color: var(--muted); font-size: 0.9rem; }
+
+details.ref { background: var(--sheet); border-radius: 16px; padding: 4px clamp(18px, 4vw, 32px); }
+details.ref summary { cursor: pointer; padding: 16px 0; font-family: var(--f-display); font-weight: 600; font-size: 1.2rem; }
+details.ref .refbody { padding-bottom: 20px; display: flex; flex-direction: column; gap: 10px; max-width: 72ch; }
+details.ref p { margin: 0; }
+footer { color: var(--muted); font-size: 0.82rem; text-align: center; }
+@media (max-width: 520px) { .answers .btn { min-width: 0; flex: 1 1 160px; } }
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Validity Trainer</h1>
+      <p class="lede">General claims about validity. Decide whether each claim holds for all statements. If it does, assemble a proof. If it doesn’t, build a counterexample from actual statements and valuations. Every question has a model answer.</p>
+    </div>
+    <div class="score" aria-live="polite"><span id="scoreText">No answers yet</span><button class="linkish" id="resetScore" type="button" hidden>Reset</button></div>
+  </header>
+
+  <section class="settings" aria-label="Question settings">
+    <div class="group"><span class="label" id="lgLevel">Level</span>
+      <div class="seg" role="radiogroup" aria-labelledby="lgLevel">
+        <input type="radio" name="level" id="level-easy" value="easy" checked><label for="level-easy">Easy</label>
+        <input type="radio" name="level" id="level-medium" value="medium"><label for="level-medium">Medium</label>
+        <input type="radio" name="level" id="level-hard" value="hard"><label for="level-hard">Hard</label>
+      </div>
+    </div>
+  </section>
+
+  <main class="sheet" id="sheet" aria-live="polite"></main>
+
+  <details class="ref">
+    <summary>How this works</summary>
+    <div class="refbody">
+      <p><i>P</i>₁, <i>P</i>₂, <i>Q</i> and <i>R</i> stand for any statements of PROP. A general claim holds only if it is true whatever statements they are.</p>
+      <p><strong>To show a claim holds</strong>, reason about an arbitrary valuation <i>v</i>. For example, to show <i>P</i>₁ ⊨ <i>Q</i>, take any valuation on which <i>P</i>₁ is true and show that <i>Q</i> must be true on it. In the proof puzzles, you put the steps of such an argument in order. At Medium and Hard, some of the steps on offer are invalid and must be left out.</p>
+      <p><strong>To show a claim fails</strong>, choose particular statements for the letters, built from elementary statements <i>A</i>, <i>B</i> and <i>C</i>, for which the claim comes out false. Then say which validity claims hold for your choice, and give a valuation for each one that fails. You can type ~ or - for ¬, &amp; for ∧, v or | for ∨, and -&gt; or &gt; for →, or use the buttons. Outer brackets may be left off.</p>
+      <p>The same reasoning works in any logic that extends classical propositional logic, with “model” in place of “valuation”.</p>
+    </div>
+  </details>
+  <footer>Questions are generated at random. Every verdict is computed exactly, and every model answer is checked before it is shown.</footer>
+</div>
+
+<script>
+// ===== Validity Trainer engine =====
+// Schematic letters P1, P2, Q, R range over statements. A "metaclaim" is a claim about validity
+// (⊨) built from entailments. It holds for all statements iff it holds for every way of assigning
+// truth sets to the letters over a non-empty space of valuations; we check that exactly by regions.
+const VEngine = (function () {
+  'use strict';
+  const rnd = Math.random;
+  const pick = a => a[Math.floor(rnd() * a.length)];
+  const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const popcount = m => { let c = 0; while (m) { m &= m - 1; c++; } return c; };
+  const LETTERS = ['P₁', 'P₂', 'Q', 'R'];
+
+  // ---------- formulas ----------
+  const V = i => ({ t: 'var', v: i });
+  const At = a => ({ t: 'atom', a });
+  const Not = f => ({ t: 'not', f });
+  const Bin = (t, l, r) => ({ t, l, r });
+  const fkey = f => f.t === 'var' ? 'v' + f.v : f.t === 'atom' ? f.a : f.t === 'not' ? '¬' + fkey(f.f) : '(' + fkey(f.l) + f.t + fkey(f.r) + ')';
+  const SYM = { and: '∧', or: '∨', imp: '→' };
+  function text(f, names) { // plain text, outer brackets kept
+    if (f.t === 'var') return names ? names[f.v] : LETTERS[f.v];
+    if (f.t === 'atom') return f.a;
+    if (f.t === 'not') return '¬' + text(f.f, names);
+    return '(' + text(f.l, names) + ' ' + SYM[f.t] + ' ' + text(f.r, names) + ')';
+  }
+  function subst(f, map) { // map: var index -> formula
+    if (f.t === 'var') return map[f.v] !== undefined ? map[f.v] : f;
+    if (f.t === 'atom') return f;
+    if (f.t === 'not') return Not(subst(f.f, map));
+    return Bin(f.t, subst(f.l, map), subst(f.r, map));
+  }
+  function varsOf(f, s = new Set()) { if (f.t === 'var') s.add(f.v); else if (f.t === 'not') varsOf(f.f, s); else if (f.t !== 'atom') { varsOf(f.l, s); varsOf(f.r, s); } return s; }
+  function atomsOf(f, s = new Set()) { if (f.t === 'atom') s.add(f.a); else if (f.t === 'not') atomsOf(f.f, s); else if (f.t !== 'var') { atomsOf(f.l, s); atomsOf(f.r, s); } return s; }
+  function size(f) { return f.t === 'var' || f.t === 'atom' ? 1 : f.t === 'not' ? 1 + size(f.f) : 1 + size(f.l) + size(f.r); }
+  function evalF(f, env) { // env: var index or atom -> bool
+    switch (f.t) {
+      case 'var': return !!env['v' + f.v];
+      case 'atom': return !!env[f.a];
+      case 'not': return !evalF(f.f, env);
+      case 'and': return evalF(f.l, env) && evalF(f.r, env);
+      case 'or': return evalF(f.l, env) || evalF(f.r, env);
+      case 'imp': return !evalF(f.l, env) || evalF(f.r, env);
+    }
+  }
+
+  // ---------- parsing (patterns and student input) ----------
+  // vars: map from token letter to formula builder
+  function parseFormula(src, varMap) {
+    const s = src.replace(/\s+/g, '');
+    let i = 0;
+    const peek = () => s[i], eat = c => { if (s.startsWith(c, i)) { i += c.length; return true; } return false; };
+    const err = msg => { const e = new Error(msg); e.pos = i; throw e; };
+    function imp() { const l = or(); if (eat('→') || eat('->') || eat('⊃') || eat('>')) return Bin('imp', l, imp()); return l; }
+    function or() { let l = and(); while (eat('∨') || eat('|') || eat('v')) l = Bin('or', l, and()); return l; }
+    function and() { let l = un(); while (eat('∧') || eat('&') || eat('^')) l = Bin('and', l, un()); return l; }
+    function un() {
+      if (eat('¬') || eat('~') || eat('!') || eat('-')) return Not(un());
+      if (eat('(') || eat('[')) { const f = imp(); if (!(eat(')') || eat(']'))) err('A closing bracket is missing.'); return f; }
+      const c = peek();
+      if (c === undefined) err('The formula ends too early.');
+      if (varMap[c] !== undefined) { i++; return varMap[c]; }
+      err('“' + c + '” is not allowed here.');
+    }
+    if (!s.length) err('Enter a formula.');
+    const f = imp();
+    if (i < s.length) err('There is something extra after the formula: “' + s.slice(i) + '”.');
+    return f;
+  }
+  const STUDENT_ATOMS = { A: At('A'), B: At('B'), C: At('C'), D: At('D') };
+  function parseStudent(src) { return parseFormula(src.replace(/[abcd]/g, m => m.toUpperCase()), STUDENT_ATOMS); }
+
+  // pattern syntax: "X, Y |= (Y | Z) => X |= Z", sides joined by && or ||, |/= for non-entailment
+  function parseEnt(src, vm) {
+    const neg = src.includes('|/=');
+    const [lhs, rhs] = src.split(neg ? '|/=' : '|=');
+    const prem = lhs.trim() ? splitTop(lhs).map(p => parseFormula(p, vm)) : [];
+    return { prem, concl: parseFormula(rhs, vm), neg };
+  }
+  function splitTop(s) { const out = []; let d = 0, cur = ''; for (const c of s) { if (c === '(') d++; if (c === ')') d--; if (c === ',' && d === 0) { out.push(cur); cur = ''; } else cur += c; } out.push(cur); return out; }
+  function parseSide(src, vm) {
+    if (src.includes('&&')) return { op: 'and', items: src.split('&&').map(x => parseEnt(x, vm)) };
+    if (src.includes('||')) return { op: 'or', items: src.split('||').map(x => parseEnt(x, vm)) };
+    return { op: 'and', items: [parseEnt(src, vm)] };
+  }
+  function parsePattern(src) {
+    const vm = { X: V(0), Y: V(1), Z: V(2), W: V(3) };
+    const iff = src.includes('<=>');
+    const [a, b] = src.split(iff ? '<=>' : '=>');
+    return { kind: iff ? 'iff' : 'imp', L: parseSide(a, vm), R: parseSide(b, vm) };
+  }
+
+  // ---------- semantics by regions ----------
+  function regionMask(f, n) {
+    let m = 0;
+    for (let r = 0; r < (1 << n); r++) {
+      const env = {}; for (let i = 0; i < n; i++) env['v' + i] = !!((r >> i) & 1);
+      if (evalF(f, env)) m |= 1 << r;
+    }
+    return m;
+  }
+  function entFail(e, n) { // regions where premises true and conclusion false
+    const full = (1 << (1 << n)) - 1;
+    let m = full; e.prem.forEach(p => (m &= regionMask(p, n)));
+    return m & ~regionMask(e.concl, n) & full;
+  }
+  const entHolds = (Q, model) => (Q & model) === 0;
+  function compile(meta, n) {
+    const c = side => ({ op: side.op, items: side.items.map(e => ({ Q: entFail(e, n), neg: e.neg })) });
+    return { kind: meta.kind, L: c(meta.L), R: c(meta.R) };
+  }
+  function sideVal(S, m) {
+    const vals = S.items.map(it => entHolds(it.Q, m) !== it.neg);
+    return S.op === 'and' ? vals.every(Boolean) : vals.some(Boolean);
+  }
+  function metaVal(C, m) { const l = sideVal(C.L, m), r = sideVal(C.R, m); return C.kind === 'iff' ? l === r : !l || r; }
+  function decide(meta, n) {
+    const C = compile(meta, n), N = 1 << (1 << n);
+    let best = null;
+    // prefer counterexamples in which each letter is sometimes true and sometimes false, then fewer valuations
+    const score = m => { let c = 0; for (let i = 0; i < n; i++) { let t = 0, f = 0; for (let r = 0; r < (1 << n); r++) if ((m >> r) & 1) { if ((r >> i) & 1) t++; else f++; } if (!t || !f) c++; } return c * 3 + popcount(m); };
+    let bestScore = Infinity;
+    for (let m = 1; m < N; m++) if (!metaVal(C, m)) { const sc = score(m); if (sc < bestScore) { best = m; bestScore = sc; } }
+    return { valid: best === null, counter: best, C };
+  }
+  // does side A (as hypotheses, conjunction) imply side B (conjunction) for all models?
+  function implies(hyps, goals, n) {
+    const H = hyps.map(e => ({ Q: entFail(e, n), neg: e.neg })), G = goals.map(e => ({ Q: entFail(e, n), neg: e.neg }));
+    for (let m = 1; m < (1 << (1 << n)); m++) {
+      if (H.every(h => entHolds(h.Q, m) !== h.neg) && !G.every(g => entHolds(g.Q, m) !== g.neg)) return false;
+    }
+    return true;
+  }
+
+  // ---------- realising a countermodel as PROP statements ----------
+  // shortest formulas for every truth table over k atoms
+  const tableCache = {};
+  function shortest(k) {
+    if (tableCache[k]) return tableCache[k];
+    const R = 1 << k, FULL = (1 << R) - 1, names = ['A', 'B', 'C'].slice(0, k);
+    const best = new Map();
+    names.forEach((a, i) => { let m = 0; for (let r = 0; r < R; r++) if ((r >> (k - 1 - i)) & 1) m |= 1 << r; best.set(m, { f: At(a), c: 1 }); });
+    let changed = true;
+    while (changed) {
+      changed = false;
+      const cur = [...best.entries()];
+      const put = (m, f, c) => { const b = best.get(m); if (!b || c < b.c) { best.set(m, { f, c }); changed = true; } };
+      for (const [m, b] of cur) put(~m & FULL, Not(b.f), b.c + (b.f.t === 'atom' ? 1 : 2));
+      for (const [m1, b1] of cur) for (const [m2, b2] of cur) {
+        if (b1.c + b2.c + 1 > 10) continue;
+        put(m1 & m2, Bin('and', b1.f, b2.f), b1.c + b2.c + 1);
+        put(m1 | m2, Bin('or', b1.f, b2.f), b1.c + b2.c + 1);
+        put((~m1 | m2) & FULL, Bin('imp', b1.f, b2.f), b1.c + b2.c + 2.2);
+      }
+    }
+    return (tableCache[k] = best);
+  }
+  // model: bit mask of regions (each region = truth values of the n letters)
+  function realise(model, n) {
+    const regs = []; for (let r = 0; r < (1 << n); r++) if ((model >> r) & 1) regs.push(r);
+    const kreg = regs.length, k = Math.max(1, Math.ceil(Math.log2(kreg)));
+    const R = 1 << k, table = shortest(k);
+    let best = null;
+    // valuations (rows) -> regions, surjective; try a bounded number of assignments
+    const assignments = [];
+    const rec = (row, arr) => {
+      if (assignments.length > 4000) return;
+      if (row === R) { if (new Set(arr).size === kreg) assignments.push(arr.slice()); return; }
+      for (let j = 0; j < kreg; j++) { arr.push(j); rec(row + 1, arr); arr.pop(); }
+    };
+    rec(0, []);
+    for (const asg of assignments) {
+      let cost = 0; const forms = [];
+      for (let i = 0; i < n; i++) {
+        let m = 0; for (let row = 0; row < R; row++) if ((regs[asg[row]] >> i) & 1) m |= 1 << row;
+        const b = table.get(m);
+        if (!b) { cost = 1e9; break; }
+        cost += b.c; forms.push(b.f);
+      }
+      if (!best || cost < best.cost) best = { cost, forms, k };
+    }
+    return { atoms: ['A', 'B', 'C'].slice(0, best.k), forms: best.forms };
+  }
+  // valuations over atoms in the order A, B, C: row r gives A = bit (k-1)
+  function rows(atoms) { const k = atoms.length, out = []; for (let r = 0; r < (1 << k); r++) { const env = {}; atoms.forEach((a, i) => (env[a] = !!((r >> (k - 1 - i)) & 1))); out.push(env); } return out.reverse(); }
+  // check an entailment for an instance (letters -> PROP formulas). Returns {holds, witness env}
+  function checkInstance(e, inst, atoms) {
+    const map = {}; inst.forEach((f, i) => (map[i] = f));
+    const prem = e.prem.map(p => subst(p, map)), concl = subst(e.concl, map);
+    for (const env of rows(atoms)) if (prem.every(p => evalF(p, env)) && !evalF(concl, env)) return { holds: false, witness: env, prem, concl };
+    return { holds: true, prem, concl };
+  }
+
+  // ---------- question generation ----------
+  const PATTERNS = [
+    // [pattern, minimum level]
+    ['X |= Y => X |= (Y | Z)', 0], ['X |= Y => X |= (Z > Y)', 0], ['X |= Y => X, Z |= Y', 0], ['X |= Y => (X & Z) |= Y', 0],
+    ['X, Y |= Z <=> (X & Y) |= Z', 0], ['X, Y |= Z <=> X |= (Y > Z)', 0], ['X |= Y <=> |= (X > Y)', 0], ['X |= Y <=> ~Y |= ~X', 0],
+    ['X |= (Y & Z) <=> X |= Y && X |= Z', 0], ['(X | Y) |= Z <=> X |= Z && Y |= Z', 1], ['X |= Y && Y |= Z => X |= Z', 0],
+    ['X |= (Y | Z) => X |= Y || X |= Z', 0], ['(X & Y) |= Z => X |= Z || Y |= Z', 0], ['X |= Y => Y |= X', 0], ['X |= Y => ~X |= ~Y', 0],
+    ['X |= Y && X |= Z => Y |= Z', 0], ['X, Y |= Z => X |= Z || Y |= Z', 1], ['X |= (Y > Z) => X, Z |= Y', 1], ['X |= (Y > Z) => X, Y |= Z', 0],
+    ['X |= Y && ~X |= Y => |= Y', 1], ['X, Y |= Z && X |= Y => X |= Z', 1], ['X |= (Y | Z) && X |= ~Y => X |= Z', 1], ['X |= (Y | Z) && Y |= Z => X |= Z', 1],
+    ['X |/= Y => X |/= (Y & Z)', 2], ['X |/= Y => X |= ~Y', 2], ['X |= Y => X |/= ~Y', 2], ['|= X => |/= ~X', 2], ['X |/= (Y | Z) => X |/= Y', 2],
+    ['X |/= Y => X, Z |/= Y', 2], ['X |= Y || X |= Z => X |= (Y | Z)', 1],
+  ];
+  const LEVEL = { easy: 0, medium: 1, hard: 2 };
+
+  function cloneF(f) { return JSON.parse(JSON.stringify(f)); }
+  function subformulas(f, out = [], path = []) { out.push({ f, path }); if (f.t === 'not') subformulas(f.f, out, path.concat('f')); else if (f.t !== 'var' && f.t !== 'atom') { subformulas(f.l, out, path.concat('l')); subformulas(f.r, out, path.concat('r')); } return out; }
+  function replaceAt(f, path, g) { if (!path.length) return g; const c = cloneF(f); let p = c; for (let i = 0; i < path.length - 1; i++) p = p[path[i]]; p[path[path.length - 1]] = g; return c; }
+  function mutateFormula(f) {
+    const subs = subformulas(f);
+    const s = pick(subs);
+    const g = s.f;
+    const opts = [];
+    if (g.t === 'and') opts.push(Bin('or', g.l, g.r));
+    if (g.t === 'or') opts.push(Bin('and', g.l, g.r));
+    if (g.t === 'imp') opts.push(Bin('imp', g.r, g.l), Bin('or', g.l, g.r));
+    if (g.t === 'not') opts.push(g.f);
+    if (g.t === 'var' || g.t === 'not') opts.push(Not(g));
+    if (!opts.length) return f;
+    return replaceAt(f, s.path, pick(opts));
+  }
+  function mutateMeta(M) {
+    const all = [...M.L.items, ...M.R.items];
+    const e = pick(all);
+    const r = rnd();
+    if (r < 0.25 && e.prem.length === 1) { const t = e.prem[0]; e.prem[0] = e.concl; e.concl = t; }
+    else if (r < 0.65 || !e.prem.length) e.concl = mutateFormula(e.concl);
+    else { const i = Math.floor(rnd() * e.prem.length); e.prem[i] = mutateFormula(e.prem[i]); }
+    return M;
+  }
+  // letters: premise-ish vars become P1, P2; the rest Q, R
+  function nameVars(M) {
+    const prem = [], other = [];
+    const walk = (f, bucket) => varsOf(f).forEach(v => { if (!prem.includes(v) && !other.includes(v)) bucket.push(v); });
+    [...M.L.items, ...M.R.items].forEach(e => e.prem.forEach(p => walk(p, prem)));
+    [...M.L.items, ...M.R.items].forEach(e => walk(e.concl, other));
+    const pp = [0, 1], cc = [2, 3], map = {};
+    prem.forEach(v => (map[v] = pp.length ? pp.shift() : cc.shift()));
+    other.forEach(v => (map[v] = cc.length ? cc.shift() : pp.shift()));
+    const ren = f => subst(f, Object.fromEntries(Object.entries(map).map(([k, v]) => [k, V(v)])));
+    const fix = side => ({ op: side.op, items: side.items.map(e => ({ prem: e.prem.map(ren), concl: ren(e.concl), neg: e.neg })) });
+    return { kind: M.kind, L: fix(M.L), R: fix(M.R) };
+  }
+  function compoundSub(M) {
+    const used = new Set(); [...M.L.items, ...M.R.items].forEach(e => { e.prem.forEach(p => varsOf(p, used)); varsOf(e.concl, used); });
+    const vs = [...used]; if (!vs.length) return M;
+    const v = pick(vs), others = [0, 1, 2, 3].filter(x => x !== v);
+    const w = pick(others);
+    const g = pick([Not(V(v)), Bin('and', V(v), V(w)), Bin('or', V(v), V(w)), Bin('imp', V(w), V(v))]);
+    const map = { [v]: g };
+    const fix = side => ({ op: side.op, items: side.items.map(e => ({ prem: e.prem.map(p => subst(p, map)), concl: subst(e.concl, map), neg: e.neg })) });
+    return { kind: M.kind, L: fix(M.L), R: fix(M.R) };
+  }
+  function lettersUsed(M) { const s = new Set(); [...M.L.items, ...M.R.items].forEach(e => { e.prem.forEach(p => varsOf(p, s)); varsOf(e.concl, s); }); return s; }
+  function compact(M) { // renumber letters so they are 0..n-1 keeping order P1,P2,Q,R
+    const used = [...lettersUsed(M)].sort();
+    return { M, n: used.length ? Math.max(...used) + 1 : 1 };
+  }
+  function trivialEnt(e, n) { const Q = entFail(e, n); return Q === 0; }
+  function generate(opts) {
+    const L = LEVEL[opts.level];
+    const want = opts.want !== undefined ? opts.want : rnd() < 0.5;
+    const pats = PATTERNS.filter(p => p[1] <= L);
+    for (let attempt = 0; attempt < 4000; attempt++) {
+      let M = parsePattern(pick(pats)[0]);
+      // present the converse of a one-way claim sometimes
+      if (M.kind === 'imp' && rnd() < 0.3) M = { kind: 'imp', L: M.R, R: M.L };
+      // sometimes ask only one direction of a biconditional
+      if (M.kind === 'iff' && rnd() < 0.4) M = rnd() < 0.5 ? { kind: 'imp', L: M.L, R: M.R } : { kind: 'imp', L: M.R, R: M.L };
+      if (M.kind === 'imp' && M.L.op === 'or') continue; // proof by cases at the meta level: not supported
+      if (L >= 1 && rnd() < (L === 1 ? 0.35 : 0.55)) M = mutateMeta(M);
+      if (L >= 1 && rnd() < (L === 1 ? 0.2 : 0.45)) M = compoundSub(M);
+      M = nameVars(M);
+      const n = Math.max(...lettersUsed(M)) + 1;
+      if (n > 4) continue;
+      const all = [...M.L.items, ...M.R.items];
+      // no entailment that holds or fails trivially on its own; no repeated entailments
+      if (all.some(e => trivialEnt(e, n) && !e.neg)) continue;
+      const keys = all.map(e => e.prem.map(fkey).join(',') + (e.neg ? '/' : '|') + fkey(e.concl));
+      if (new Set(keys).size !== keys.length) continue;
+      if (all.some(e => e.prem.some(p => fkey(p) === fkey(e.concl)))) continue;
+      if (all.some(e => size(e.concl) > 7 || e.prem.some(p => size(p) > 7))) continue;
+      const d = decide(M, n);
+      if (d.valid !== want) continue;
+      // the claim should not hold just because its consequent always holds
+      if (d.valid && M.kind === 'imp' && implies([], M.R.op === 'and' ? M.R.items : [], n) && M.R.op === 'and') continue;
+      const q = { level: opts.level, meta: M, n, valid: d.valid, phrasing: phrase(M) };
+      if (d.valid) {
+        q.proof = buildProof(q);
+        if (!q.proof) continue;
+        if (q.proof.parts.some(p => p.lines.length > 14)) continue;
+        q.proof.parts.forEach(p => (p.distractors = makeDistractors(p, L)));
+      } else {
+        q.counter = d.counter;
+        q.instance = realise(d.counter, n);
+      }
+      return q;
+    }
+    return null;
+  }
+  function phrase(M) {
+    const one = M.L.items.length === 1 && M.R.items.length === 1;
+    if (M.kind === 'iff') return 'iff';
+    if (one) return pick(['onlyif', 'ifthen']);
+    return 'ifthen';
+  }
+
+  // ---------- valuation-chasing proofs ----------
+  // hypotheses: positive entailments act as rules, negative ones supply witnesses
+  function buildProof(q) {
+    const M = q.meta, n = q.n;
+    const dirs = M.kind === 'iff' ? [{ hyps: M.L.items, R: M.R, tag: '⇒' }, { hyps: M.R.items, R: M.L, tag: '⇐' }] : [{ hyps: M.L.items, R: M.R, tag: null }];
+    const parts = [];
+    for (const d of dirs) {
+      if (d.R.op === 'or' && d.R.items.length > 1 || M.kind === 'iff' && d.R.op === 'or') {
+        const ok = d.R.items.find(g => implies(d.hyps, [g], n));
+        if (!ok) return null;
+        d.goals = [ok]; d.orPick = d.R.items.indexOf(ok);
+      } else d.goals = d.R.items;
+      d.subs = [];
+      for (const g of d.goals) {
+        const sp = proveGoal(d.hyps, g, n);
+        if (!sp) return null;
+        d.subs.push(sp);
+      }
+      parts.push(d);
+    }
+    // flatten into puzzle parts: one per sub-proof
+    const flat = [];
+    parts.forEach(d => d.subs.forEach(sp => flat.push(Object.assign(sp, { dir: d }))));
+    return { dirs: parts, parts: flat };
+  }
+  function proveGoal(hyps, g, n) {
+    const rules = [], wits = [];
+    hyps.forEach((h, i) => { if (h.neg) wits.push({ h, i }); else rules.push({ h, i }); });
+    if (!g.neg) {
+      const assume = g.prem.map(p => [p, true]);
+      const res = tableau(rules, assume, [[g.concl, true]]);
+      if (!res) return null;
+      return finishSub({ kind: 'univ', goal: g, res, hyps });
+    }
+    // negative goal: a witness valuation, from a negative hypothesis or from there being any valuation at all
+    const goalLits = g.prem.map(p => [p, true]).concat([[g.concl, false]]);
+    let best = null;
+    for (const w of wits.concat([{ h: null, i: -1 }])) {
+      const assume = w.h ? w.h.prem.map(p => [p, true]).concat([[w.h.concl, false]]) : [];
+      const res = tableau(rules, assume, goalLits, true);
+      if (res && res.status !== 'contraAll' && (!best || res.size < best.res.size)) best = { res, w };
+    }
+    if (!best) return null;
+    return finishSub({ kind: 'wit', goal: g, res: best.res, hyps, wit: best.w });
+  }
+  function finishSub(sp) { sp.lines = []; return sp; }
+
+  // single-valuation tableau: facts "formula is true/false on v"
+  function tableau(rules, assume, goal, noContraAll) {
+    let FID = 0;
+    const facts = {};
+    function St(parent) { this.parent = parent; this.own = []; this.tf = parent ? new Map(parent.tf) : new Map(); }
+    const K = (f, pos) => fkey(f) + (pos ? '+' : '-');
+    function val(st, f) {
+      const a = st.tf.get(K(f, true)), b = st.tf.get(K(f, false));
+      if (a) return { v: true, deps: [a.id] };
+      if (b) return { v: false, deps: [b.id] };
+      if (f.t === 'var') return { v: null, deps: [] };
+      if (f.t === 'not') { const c = val(st, f.f); return c.v === null ? c : { v: !c.v, deps: c.deps }; }
+      const l = val(st, f.l), r = val(st, f.r);
+      if (f.t === 'and') { if (l.v === false) return l; if (r.v === false) return r; if (l.v && r.v) return { v: true, deps: [...l.deps, ...r.deps] }; }
+      if (f.t === 'or') { if (l.v === true) return l; if (r.v === true) return r; if (l.v === false && r.v === false) return { v: false, deps: [...l.deps, ...r.deps] }; }
+      if (f.t === 'imp') { if (l.v === false) return { v: true, deps: l.deps }; if (r.v === true) return { v: true, deps: r.deps }; if (l.v === true && r.v === false) return { v: false, deps: [...l.deps, ...r.deps] }; }
+      return { v: null, deps: [] };
+    }
+    function add(st, f, pos, kind, deps, rule) {
+      const k = K(f, pos);
+      if (st.tf.has(k)) return { f: st.tf.get(k), dup: true };
+      const fact = { id: FID++, f, pos, kind, deps, rule, st };
+      facts[fact.id] = fact; st.own.push(fact); st.tf.set(k, fact);
+      const other = st.tf.get(K(f, !pos));
+      if (other) return { f: fact, clash: other };
+      return { f: fact };
+    }
+    // make sure a formula's (computed) value is recorded as a fact, composing upwards
+    function asFact(st, f, pos) {
+      const ex = st.tf.get(K(f, pos)); if (ex) return ex;
+      const kids = [];
+      if (f.t === 'not') kids.push(asFact(st, f.f, !pos));
+      else if (f.t === 'and') { if (pos) kids.push(asFact(st, f.l, true), asFact(st, f.r, true)); else kids.push(val(st, f.l).v === false ? asFact(st, f.l, false) : asFact(st, f.r, false)); }
+      else if (f.t === 'or') { if (pos) kids.push(val(st, f.l).v === true ? asFact(st, f.l, true) : asFact(st, f.r, true)); else kids.push(asFact(st, f.l, false), asFact(st, f.r, false)); }
+      else if (f.t === 'imp') { if (pos) kids.push(val(st, f.l).v === false ? asFact(st, f.l, false) : asFact(st, f.r, true)); else kids.push(asFact(st, f.l, true), asFact(st, f.r, false)); }
+      return add(st, f, pos, 'compose', kids.map(k => k.id)).f;
+    }
+    function step(st) {
+      const tryAdd = (f, pos, kind, depsFn, rule) => {
+        if (val(st, f).v === pos) return null;
+        const deps = depsFn();
+        const r = add(st, f, pos, kind, deps, rule);
+        if (r.dup) return null;
+        if (r.clash) return { contra: { deps: [r.f.id, r.clash.id], other: r.clash } };
+        return { added: r.f };
+      };
+      for (const fact of [...st.tf.values()]) {
+        const f = fact.f, pos = fact.pos;
+        const out = [];
+        if (f.t === 'not') out.push([f.f, !pos, () => [fact.id]]);
+        if (f.t === 'and' && pos) out.push([f.l, true, () => [fact.id]], [f.r, true, () => [fact.id]]);
+        if (f.t === 'or' && !pos) out.push([f.l, false, () => [fact.id]], [f.r, false, () => [fact.id]]);
+        if (f.t === 'imp' && !pos) out.push([f.l, true, () => [fact.id]], [f.r, false, () => [fact.id]]);
+        if (f.t === 'and' && !pos) { if (val(st, f.l).v === true) out.push([f.r, false, () => [fact.id, asFact(st, f.l, true).id]]); if (val(st, f.r).v === true) out.push([f.l, false, () => [fact.id, asFact(st, f.r, true).id]]); }
+        if (f.t === 'or' && pos) { if (val(st, f.l).v === false) out.push([f.r, true, () => [fact.id, asFact(st, f.l, false).id]]); if (val(st, f.r).v === false) out.push([f.l, true, () => [fact.id, asFact(st, f.r, false).id]]); }
+        if (f.t === 'imp' && pos) { if (val(st, f.l).v === true) out.push([f.r, true, () => [fact.id, asFact(st, f.l, true).id]]); if (val(st, f.r).v === false) out.push([f.l, false, () => [fact.id, asFact(st, f.r, false).id]]); }
+        for (const [g, p, dfn] of out) { const r = tryAdd(g, p, 'decomp', dfn); if (r) return r; }
+      }
+      for (const rule of rules) {
+        const e = rule.h;
+        const pv = e.prem.map(p => val(st, p).v);
+        if (pv.every(v => v === true) && val(st, e.concl).v !== true) {
+          const r = tryAdd(e.concl, true, 'rule', () => e.prem.map(p => asFact(st, p, true).id), rule); if (r) return r;
+        }
+        if (val(st, e.concl).v === false) {
+          const open = pv.map((v, i) => (v === true ? -1 : i)).filter(i => i >= 0);
+          if (open.length === 1 && pv[open[0]] === null) {
+            const j = open[0];
+            const r = tryAdd(e.prem[j], false, 'ruleC', () => [asFact(st, e.concl, false).id, ...e.prem.filter((_, i) => i !== j).map(p => asFact(st, p, true).id)], rule); if (r) return r;
+          }
+        }
+      }
+      return null;
+    }
+    function goalMet(st) {
+      if (!goal) return null;
+      for (const [f, pos] of goal) if (val(st, f).v !== pos) return null;
+      return goal.map(([f, pos]) => asFact(st, f, pos).id);
+    }
+    function closure(ids) { const need = new Set(), stack = ids.slice(); while (stack.length) { const id = stack.pop(); if (need.has(id)) continue; need.add(id); facts[id].deps.forEach(d => stack.push(d)); } return need; }
+    function solve(st, depth) {
+      for (let guard = 0; guard < 300; guard++) {
+        const g = goalMet(st);
+        if (g) return { status: 'goal', need: closure(g), st, ends: g };
+        const r = step(st);
+        if (r && r.contra) return { status: 'contra', need: closure(r.contra.deps), st, contra: r.contra };
+        if (!r) break;
+      }
+      if (depth >= 5) return null;
+      const rel = new Set();
+      (goal || []).forEach(([f]) => varsOf(f, rel));
+      rules.forEach(r => { r.h.prem.forEach(p => varsOf(p, rel)); varsOf(r.h.concl, rel); });
+      const cand = [...rel].sort().filter(v => val(st, V(v)).v === null);
+      if (!cand.length) return null;
+      const v = cand[0], branches = [];
+      for (const pos of [true, false]) {
+        const st2 = new St(st);
+        const cf = add(st2, V(v), pos, 'case', []).f;
+        const r = solve(st2, depth + 1);
+        if (!r) return null;
+        if (!r.need.has(cf.id)) return r;
+        branches.push({ r, cf });
+      }
+      const need = new Set();
+      branches.forEach(b => b.r.need.forEach(id => { if (id !== b.cf.id) need.add(id); }));
+      return { status: 'split', need, st, v, branches };
+    }
+    const root = new St(null);
+    for (const [f, pos] of assume) { const r = add(root, f, pos, 'given', []); if (r.clash) return null; }
+    const res = solve(root, 0);
+    if (!res) return null;
+    const allContra = r => (r.status === 'contra' ? true : r.status === 'goal' ? false : r.branches.every(b => allContra(b.r)));
+    if (noContraAll && allContra(res)) return { status: 'contraAll' };
+    let size = 0;
+    const count = r => { size += [...r.need].filter(id => facts[id].kind !== 'given' && facts[id].kind !== 'case').length; if (r.branches) r.branches.forEach(b => count(b.r)); };
+    count(res);
+    return { res, facts, assume, goal, size, allContra: allContra(res) };
+  }
+
+  // distractors: plausible but invalid one-step inferences about formulas in the proof
+  function makeDistractors(sp, L) {
+    const want = L === 0 ? 0 : L === 1 ? 1 : 2;
+    if (!want) return [];
+    const facts = Object.values(sp.res.facts);
+    const cands = [];
+    const seen = new Set(facts.map(f => fkey(f.f) + f.pos));
+    for (const fa of facts) {
+      const f = fa.f;
+      if (fa.pos && f.t === 'or') { cands.push({ from: [[f, true]], to: [f.l, true], why: 'or' }); cands.push({ from: [[f, true]], to: [f.r, true], why: 'or' }); }
+      if (!fa.pos && f.t === 'and') cands.push({ from: [[f, false]], to: [f.l, false], why: 'and' });
+      if (fa.pos && f.t === 'imp') { cands.push({ from: [[f, true]], to: [f.r, true], why: 'imp' }); cands.push({ from: [[f, true], [f.r, true]], to: [f.l, true], why: 'affirm' }); cands.push({ from: [[f, true], [f.l, false]], to: [f.r, false], why: 'deny' }); }
+      if (fa.kind === 'rule' && fa.rule && fa.rule.h.prem.length === 1) cands.push({ from: [[fa.f, true]], to: [fa.rule.h.prem[0], true], why: 'converse', rule: fa.rule });
+    }
+    const out = [];
+    for (const c of shuffle(cands)) {
+      if (out.length >= want) break;
+      if (seen.has(fkey(c.to[0]) + c.to[1]) && c.why !== 'converse') continue;
+      const k = c.from.map(([f, p]) => fkey(f) + p).join(';') + '>' + fkey(c.to[0]) + c.to[1];
+      if (out.some(o => o.k === k)) continue;
+      out.push(Object.assign(c, { k }));
+    }
+    return out;
+  }
+
+  return { generate, parseStudent, parseFormula, checkInstance, rows, evalF, subst, text, fkey, V, At, Not, Bin, LETTERS, atomsOf, decide, implies, entFail, regionMask, realise, PATTERNS, parsePattern };
+})();
+if (typeof module !== 'undefined') module.exports = VEngine;
+
+</script>
+<script>
+// ===== Validity Trainer: rendering of claims, proofs and counterexamples =====
+const VRender = (function () {
+  'use strict';
+  const E = VEngine;
+  const NAMES_H = ['<i>P</i>₁', '<i>P</i>₂', '<i>Q</i>', '<i>R</i>'];
+  const SYM = { and: '∧', or: '∨', imp: '→' };
+  function fH(f) {
+    if (f.t === 'var') return NAMES_H[f.v];
+    if (f.t === 'atom') return '<i>' + f.a + '</i>';
+    if (f.t === 'not') return '¬' + fH(f.f);
+    return '(' + fH(f.l) + ' ' + SYM[f.t] + ' ' + fH(f.r) + ')';
+  }
+  const entH = e => (e.prem.length ? e.prem.map(fH).join(', ') + ' ' : '') + (e.neg ? '⊭' : '⊨') + ' ' + fH(e.concl);
+  const posEnt = e => Object.assign({}, e, { neg: false });
+  const listAnd = xs => (xs.length <= 1 ? xs.join('') : xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1]);
+  const V = '<i>v</i>';
+  const stmt = (f, pos) => fH(f) + ' is ' + (pos ? 'true' : 'false') + ' on ' + V;
+  const allOf = n => (n === 2 ? ' both' : n > 2 ? ' all' : '');
+  const areTrue = fs => listAnd(fs.map(fH)) + (fs.length > 1 ? ' are' : ' is') + ' true';
+
+  function sideH(S) {
+    const items = S.items.map(entH);
+    if (items.length === 1) return items[0];
+    return S.op === 'or' ? 'either ' + items.join(' or ') : items.join(' and ');
+  }
+  function claimH(q) {
+    const M = q.meta;
+    if (M.kind === 'iff') return sideH(M.L) + ' if and only if ' + sideH(M.R);
+    if (q.phrasing === 'onlyif') return sideH(M.L) + ' only if ' + sideH(M.R);
+    return 'if ' + sideH(M.L) + ', then ' + sideH(M.R);
+  }
+  function lettersUsed(q) { const s = new Set(); [...q.meta.L.items, ...q.meta.R.items].forEach(e => { e.prem.forEach(p => collect(p, s)); collect(e.concl, s); }); return [...s].sort(); }
+  function collect(f, s) { if (f.t === 'var') s.add(f.v); else if (f.t === 'not') collect(f.f, s); else if (f.t !== 'atom') { collect(f.l, s); collect(f.r, s); } }
+  function components(q) { // distinct entailments (ignoring negation) in order of appearance
+    const out = [];
+    [...q.meta.L.items, ...q.meta.R.items].forEach(e => { const k = E.fkey(E.Not(e.concl)) + e.prem.map(E.fkey).join(','); if (!out.some(o => o.k === k)) out.push({ k, e: posEnt(e) }); });
+    return out.map(o => o.e);
+  }
+
+  // ---------- proofs as ordered lines with prerequisites ----------
+  function subLines(sp) {
+    const T = sp.res, facts = T.facts, g = sp.goal;
+    const lines = [];
+    const factLine = {};
+    let lid = 0;
+    const push = (h, ind, kind, prereq, extra) => { const L = Object.assign({ id: lid++, h, ind, kind, prereq: prereq || [] }, extra || {}); lines.push(L); return L; };
+    // intro
+    let introH;
+    if (sp.kind === 'univ') introH = g.prem.length ? 'Take any valuation ' + V + ' on which ' + areTrue(g.prem) + '.' : 'Take any valuation ' + V + '.';
+    else if (sp.wit.h) { const h = sp.wit.h; introH = 'Since ' + entH(h) + ', there is a valuation ' + V + ' on which ' + (h.prem.length ? areTrue(h.prem) + ' and ' : '') + fH(h.concl) + ' is false.'; }
+    else introH = 'Take any valuation ' + V + ' (there is always at least one).';
+    const intro = push(introH, 0, 'intro');
+    T.assume.forEach((_, i) => { });
+    Object.values(facts).forEach(f => { if (f.kind === 'given') factLine[f.id] = intro.id; });
+    function render(res, stop, ind, inCase) {
+      const blockStart = lines.length;
+      const own = [];
+      for (let s = res.st; s && s !== stop; s = s.parent) own.push(...s.own);
+      own.sort((a, b) => a.id - b.id);
+      for (const f of own) {
+        if (!res.need.has(f.id) || f.kind === 'given' || f.kind === 'case') continue;
+        const deps = f.deps.map(id => facts[id]);
+        let h;
+        if (f.rule) h = deps.length ? 'Since ' + listAnd(deps.map(d => stmt(d.f, d.pos))) + ', and ' + entH(f.rule.h) + ', ' + stmt(f.f, f.pos) + '.' : 'Since ' + entH(f.rule.h) + ', ' + stmt(f.f, f.pos) + '.';
+        else h = 'Since ' + listAnd(deps.map(d => stmt(d.f, d.pos))) + ', ' + stmt(f.f, f.pos) + '.';
+        const L = push(h, ind, 'step', f.deps.map(id => factLine[id]).filter(x => x !== undefined));
+        factLine[f.id] = L.id;
+      }
+      if (res.status === 'contra') {
+        const o = res.contra.other, nw = facts[res.contra.deps[0]];
+        push('But we already have that ' + stmt(o.f, o.pos) + '. That is a contradiction' + (inCase ? ', so this case cannot arise.' : '.'), ind, 'contra', [factLine[o.id], factLine[nw.id]].filter(x => x !== undefined));
+      }
+      if (res.status === 'goal' && inCase) {
+        const gl = res.ends.map(id => facts[id]);
+        push('So ' + listAnd(gl.map(d => stmt(d.f, d.pos))) + '.', ind, 'casegoal', gl.map(d => factLine[d.id]).filter(x => x !== undefined));
+      }
+      if (res.status === 'split') {
+        const before = lines.slice(blockStart).map(l => l.id);
+        let prevBlock = [];
+        res.branches.forEach((b, k) => {
+          const hd = push('Case ' + (k + 1) + ': ' + stmt(b.cf.f, b.cf.pos) + '.', ind, 'case', before.concat(prevBlock));
+          factLine[b.cf.id] = hd.id;
+          const start = lines.length;
+          render(b.r, res.st, ind + 1, true);
+          const blk = lines.slice(start);
+          blk.forEach(l => { if (!l.prereq.includes(hd.id)) l.prereq.push(hd.id); });
+          prevBlock = prevBlock.concat([hd.id], blk.map(l => l.id));
+        });
+      }
+      // last lines of a block must come after everything else in that block
+      const blockIds = lines.slice(blockStart).map(l => l.id);
+      lines.slice(blockStart).forEach(l => { if (l.kind === 'contra' || l.kind === 'casegoal') l.prereq = Array.from(new Set(l.prereq.concat(blockIds.filter(id => id < l.id && lines[id].ind >= l.ind)))); });
+    }
+    render(T.res, null, 1, false);
+    // everything after the intro
+    lines.forEach(l => { if (l.id !== intro.id && !l.prereq.includes(intro.id)) l.prereq.push(intro.id); });
+    // closing line
+    let end;
+    const split = T.res.status === 'split';
+    if (sp.kind === 'univ') {
+      if (T.allContra) end = 'So no valuation makes ' + listAnd(g.prem.map(fH)) + allOf(g.prem.length) + ' true, and so ' + entH(g) + ' holds trivially.';
+      else if (g.prem.length) end = (split ? 'So in every case, ' + stmt(g.concl, true) + '. ' : '') + 'So every valuation on which ' + areTrue(g.prem) + ' makes ' + fH(g.concl) + ' true. That is, ' + entH(g) + '.';
+      else end = (split ? 'So in every case, ' + stmt(g.concl, true) + '. ' : '') + 'Since ' + V + ' was any valuation, ' + fH(g.concl) + ' is true on every valuation. That is, ' + entH(g) + '.';
+    } else {
+      end = (split ? 'So in every possible case, ' : 'So ') + V + ' makes ' + (g.prem.length ? listAnd(g.prem.map(fH)) + ' true and ' : '') + fH(g.concl) + ' false. So ' + entH(g) + '.';
+    }
+    push(end, 0, 'end', lines.map(l => l.id));
+    return lines;
+  }
+  const WHY = {
+    or: 'A disjunction can be true while that disjunct is false.',
+    and: 'A conjunction is false whenever either conjunct is false, so this conjunct need not be false.',
+    imp: 'A conditional can be true while its consequent is false, namely when its antecedent is false.',
+    affirm: 'This affirms the consequent: a conditional and its consequent can both be true while the antecedent is false.',
+    deny: 'This denies the antecedent: a conditional can be true with a false antecedent and a true consequent.',
+    converse: 'This runs the validity claim backwards: it says that valuations making the left-hand side true make the right-hand side true, not the reverse.',
+  };
+  function distractorLine(d) {
+    const from = d.from.map(([f, p]) => stmt(f, p));
+    if (d.why === 'converse') return 'Since ' + listAnd(from) + ', and ' + entH(d.rule.h) + ', ' + stmt(d.to[0], d.to[1]) + '.';
+    return 'Since ' + listAnd(from) + ', ' + stmt(d.to[0], d.to[1]) + '.';
+  }
+  function dirHeader(q, d, k) {
+    const out = [];
+    if (q.meta.kind === 'iff') out.push({ title: k === 0 ? 'Left to right' : 'Right to left' });
+    const hyps = d.hyps.map(entH);
+    out.push({ h: 'Suppose that ' + hyps.join(' and that ') + '.' });
+    if (d.orPick !== undefined && d.R.items.length > 1) out.push({ h: 'We show that ' + entH(d.goals[0]) + ', which is enough for ' + sideH(d.R) + '.' });
+    else if (d.goals.length === 1) out.push({ h: 'We need to show that ' + entH(d.goals[0]) + '.' });
+    else out.push({ h: 'We need to show that ' + d.goals.map(entH).join(' and that ') + '. We take these in turn.' });
+    return out;
+  }
+  function proofModel(q) { // structured model answer
+    const blocks = [];
+    q.proof.dirs.forEach((d, k) => {
+      const head = dirHeader(q, d, k);
+      const subs = d.subs.map((sp, j) => ({ lead: d.goals.length > 1 ? ['First', 'Second', 'Third'][j] + ', ' + entH(d.goals[j]) + '.' : null, lines: subLines(sp), sp }));
+      blocks.push({ head, subs });
+    });
+    let close;
+    if (q.meta.kind === 'iff') close = 'So ' + sideH(q.meta.L) + ' if and only if ' + sideH(q.meta.R) + '.';
+    else { const ls = lettersUsed(q); close = 'So the claim holds: whatever statement' + (ls.length > 1 ? 's ' : ' ') + listAnd(ls.map(i => NAMES_H[i])) + (ls.length > 1 ? ' are' : ' is') + ', ' + claimH(q) + '.'; }
+    return { blocks, close };
+  }
+
+  // ---------- counterexamples ----------
+  const tv = b => (b ? 'T' : 'F');
+  const valH = env => Object.keys(env).sort().map(a => '<i>' + a + '</i> = ' + tv(env[a])).join(', ');
+  function explainInstance(q, inst, atoms) {
+    const comps = components(q).map(e => ({ e, r: E.checkInstance(e, inst, atoms) }));
+    const evalE = e => { const c = comps.find(c => E.fkey(c.e.concl) === E.fkey(e.concl) && c.e.prem.map(E.fkey).join() === e.prem.map(E.fkey).join()); return c.r.holds !== e.neg; };
+    const side = S => (S.op === 'and' ? S.items.every(evalE) : S.items.some(evalE));
+    const l = side(q.meta.L), r = side(q.meta.R);
+    const claimTrue = q.meta.kind === 'iff' ? l === r : !l || r;
+    return { comps, l, r, claimTrue };
+  }
+  function metaVerdictH(q, ex) {
+    const M = q.meta;
+    if (ex.claimTrue) return 'With these statements the claim comes out true, so they do not give a counterexample.';
+    if (M.kind === 'iff') return 'So one side of the “if and only if” holds and the other does not: the claim is false for these statements.';
+    if (q.phrasing === 'onlyif') return 'So the left-hand side holds but the right-hand side does not: the claim is false for these statements.';
+    return 'So the “if” part holds but the “then” part does not: the claim is false for these statements.';
+  }
+  function compReason(c, inst, atoms) {
+    const r = c.r;
+    if (!r.holds) {
+      const env = r.witness;
+      return 'Fails. On the valuation ' + valH(env) + ', ' + (r.prem.length ? listAnd(c.e.prem.map(fH)) + (r.prem.length > 1 ? ' are' : ' is') + ' true and ' : '') + fH(c.e.concl) + ' is false.';
+    }
+    const all = E.rows(atoms);
+    const premOK = all.filter(env => r.prem.every(p => E.evalF(p, env)));
+    if (r.prem.length && !premOK.length) return 'Holds, trivially: no valuation makes ' + listAnd(c.e.prem.map(fH)) + allOf(r.prem.length) + ' true.';
+    return 'Holds. Every valuation on which ' + (r.prem.length ? listAnd(c.e.prem.map(fH)) + (r.prem.length > 1 ? ' are' : ' is') + ' true' : 'anything at all is true') + ' makes ' + fH(c.e.concl) + ' true' + (r.prem.length ? '' : ': it is true on every valuation') + ' (see the truth table).';
+  }
+  // truth-table columns: letters, then the compound formulas from the components
+  function tableCols(q) {
+    const cols = [], seen = new Set();
+    const addF = f => { const k = E.fkey(f); if (!seen.has(k)) { seen.add(k); cols.push(f); } };
+    lettersUsed(q).forEach(i => addF(E.V(i)));
+    const walk = f => { if (f.t === 'not') walk(f.f); else if (f.t !== 'var' && f.t !== 'atom') { walk(f.l); walk(f.r); } if (f.t !== 'var') addF(f); };
+    components(q).forEach(e => { e.prem.forEach(walk); walk(e.concl); });
+    return cols;
+  }
+  return { fH, entH, claimH, lettersUsed, components, subLines, distractorLine, WHY, dirHeader, proofModel, explainInstance, metaVerdictH, compReason, tableCols, valH, NAMES_H, tv };
+})();
+if (typeof module !== 'undefined') module.exports = VRender;
+
+</script>
+<script>
+(function () {
+  'use strict';
+  const E = VEngine, R = VRender;
+  const $ = s => document.querySelector(s);
+  const sheet = $('#sheet');
+  const state = { q: null, answered: false, total: 0, correct: 0 };
+  window.__vt = state;
+  const store = {
+    get(k) { try { return JSON.parse(localStorage.getItem('vt-' + k)); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem('vt-' + k, JSON.stringify(v)); } catch (e) { } },
+  };
+  const val = n => document.querySelector(`input[name="${n}"]:checked`).value;
+  const saved = store.get('settings');
+  if (saved) { const el = document.getElementById('level-' + saved.level); if (el) el.checked = true; }
+  const sc = store.get('score');
+  if (sc) { state.total = sc.total || 0; state.correct = sc.correct || 0; }
+  function updateScore() {
+    $('#scoreText').innerHTML = state.total ? `<strong>${state.correct}</strong> correct out of <strong>${state.total}</strong>` : 'No answers yet';
+    $('#resetScore').hidden = !state.total;
+    store.set('score', { total: state.total, correct: state.correct });
+  }
+  $('#resetScore').addEventListener('click', () => { state.total = 0; state.correct = 0; updateScore(); });
+  const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const listAnd = xs => (xs.length <= 1 ? xs.join('') : xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1]);
+  function makePad(container, target) {
+    ['¬', '∧', '∨', '→', '(', ')', 'A', 'B', 'C'].forEach(s => {
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = s; b.setAttribute('aria-label', 'Insert ' + s);
+      b.addEventListener('mousedown', e => e.preventDefault());
+      b.addEventListener('click', () => {
+        const el = target();
+        if (!el) return;
+        const a = el.selectionStart ?? el.value.length, z = el.selectionEnd ?? a;
+        el.value = el.value.slice(0, a) + s + el.value.slice(z);
+        el.focus(); el.selectionStart = el.selectionEnd = a + s.length;
+        el.dispatchEvent(new Event('input'));
+      });
+      container.appendChild(b);
+    });
+  }
+
+  // ---------- question ----------
+  function newQuestion() {
+    store.set('settings', { level: val('level') });
+    sheet.innerHTML = '<p class="loading">Writing a question…</p>';
+    setTimeout(() => {
+      let q = null;
+      try { q = E.generate({ level: val('level') }); } catch (e) { console.error(e); }
+      if (!q) { sheet.innerHTML = '<p class="loading">No question came out this time.</p><div class="actions"><span></span><button class="btn btn-primary" id="next" type="button">New question</button></div>'; $('#next').onclick = newQuestion; return; }
+      state.q = q; state.answered = false;
+      renderQuestion();
+    }, 20);
+  }
+  function renderQuestion() {
+    const q = state.q;
+    const ls = R.lettersUsed(q).map(i => R.NAMES_H[i]);
+    const lvl = val('level');
+    sheet.innerHTML = `
+      <div class="qhead"><h2>Does this hold in general?</h2><div class="tags"><span class="tag">${lvl[0].toUpperCase() + lvl.slice(1)}</span></div></div>
+      <div class="qtext">
+        <span class="lead">Suppose that ${listAnd(ls)} ${ls.length > 1 ? 'are statements' : 'is a statement'} of PROP. Is it the case that</span>
+        <span class="claim">${R.claimH(q)} ?</span>
+      </div>
+      <details class="work" id="workBox">
+        <summary>Your working</summary>
+        <p class="hint">A space for rough work. It isn’t marked.</p>
+        <div class="pad" id="pad"></div>
+        <textarea id="work" aria-label="Your working" spellcheck="false"></textarea>
+      </details>
+      <div class="answers" role="group" aria-label="Your answer">
+        <button class="btn btn-ghost" type="button" id="ansYes">Yes, it holds</button>
+        <button class="btn btn-ghost" type="button" id="ansNo">No, it doesn’t hold</button>
+      </div>
+      <div id="fb"></div>
+      <div id="taskSlot"></div>
+      <div id="modelSlot"></div>
+      <div class="actions">
+        <button class="btn btn-ghost" type="button" id="reveal">Show model answer</button>
+        <button class="btn btn-primary" type="button" id="next">New question</button>
+      </div>`;
+    const pad = $('#pad');
+    ['⊨', '⊭', '¬', '∧', '∨', '→', '(', ')'].forEach(s => {
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = s; b.setAttribute('aria-label', 'Insert ' + s);
+      b.addEventListener('click', () => { const w = $('#work'); const a = w.selectionStart ?? w.value.length, z = w.selectionEnd ?? a; w.value = w.value.slice(0, a) + s + w.value.slice(z); w.focus(); w.selectionStart = w.selectionEnd = a + s.length; });
+      pad.appendChild(b);
+    });
+    $('#ansYes').onclick = () => answer(true);
+    $('#ansNo').onclick = () => answer(false);
+    $('#reveal').onclick = () => { lock(); showModel(); };
+    $('#next').onclick = newQuestion;
+  }
+  function lock() { if (state.answered) return; state.answered = true; $('#ansYes').disabled = true; $('#ansNo').disabled = true; }
+  function answer(yes) {
+    if (state.answered) return;
+    lock();
+    const q = state.q, right = yes === q.valid;
+    state.total++; if (right) state.correct++;
+    updateScore();
+    const btn = yes ? $('#ansYes') : $('#ansNo');
+    btn.disabled = false; btn.classList.add(right ? 'picked-right' : 'picked-wrong');
+    let msg;
+    if (q.valid) msg = (right ? 'Correct: the claim holds. ' : 'Not quite: the claim does hold. ') + 'Now put together a proof below.';
+    else msg = (right ? 'Correct: the claim doesn’t hold. ' : 'Not quite: the claim doesn’t hold. ') + 'Now show it, by building a counterexample below.';
+    $('#fb').innerHTML = `<div class="feedback ${right ? 'right' : 'wrong'}">${msg}</div>`;
+    if (q.valid) showPuzzles(); else showBuilder();
+  }
+
+  // ---------- proof puzzles ----------
+  function showPuzzles() {
+    const q = state.q, slot = $('#taskSlot');
+    const pm = R.proofModel(q);
+    let html = `<div class="panel"><h3>Put the proof together</h3><p class="p-note">Tap steps to add them to your proof, in order; tap a step in your proof to take it out again.${val('level') !== 'easy' ? ' Some of the steps on offer are not valid inferences, and must be left out.' : ''}</p>`;
+    const puzzles = [];
+    pm.blocks.forEach((b, bi) => {
+      html += '<div class="box">';
+      html += '<div class="fixed">' + b.head.map(h => (h.title ? `<div class="ttl">${h.title}</div>` : `<div>${h.h}</div>`)).join('') + '</div>';
+      b.subs.forEach((s, si) => {
+        const id = 'pz' + bi + '-' + si;
+        const items = s.lines.map(l => ({ text: l.h, real: true })).concat(s.sp.distractors.map(d => ({ text: R.distractorLine(d), real: false, why: R.WHY[d.why] })));
+        puzzles.push({ id, lines: s.lines, items: shuffle(items.map((it, k) => Object.assign(it, { k }))), placed: [], solved: false });
+        html += `<div class="puzzle" id="${id}">${s.lead ? `<div class="fixed"><div class="ttl">${s.lead}</div></div>` : ''}
+          <div class="cols"><div><div class="colttl">Your proof</div><ol class="placed"></ol></div><div><div class="colttl">Steps</div><ul class="pool"></ul></div></div>
+          <div class="row"><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary btn-small chk" type="button">Check this proof</button><button class="btn btn-ghost btn-small rst" type="button">Start again</button></div></div>
+          <div class="pfb"></div></div>`;
+      });
+      html += '</div>';
+    });
+    html += '</div>';
+    slot.innerHTML = html;
+    puzzles.forEach(pz => {
+      const root = document.getElementById(pz.id);
+      const placedEl = root.querySelector('.placed'), poolEl = root.querySelector('.pool'), fb = root.querySelector('.pfb');
+      const draw = (marks = {}) => {
+        placedEl.innerHTML = ''; poolEl.innerHTML = '';
+        pz.placed.forEach((k, pos) => {
+          const it = pz.items.find(x => x.k === k);
+          const li = document.createElement('li');
+          if (pz.solved && marks.ind) li.className = 'ind' + Math.min(4, marks.ind[pos] || 0);
+          const b = document.createElement('button'); b.type = 'button'; b.className = 'stepbtn' + (marks.bad === pos ? ' bad' : '') + (pz.solved ? ' good' : '');
+          b.innerHTML = '<span></span>'; b.lastChild.innerHTML = it.text; b.setAttribute('aria-label', 'Remove step: ' + it.text.replace(/<[^>]+>/g, ''));
+          b.onclick = () => { if (pz.solved) return; pz.placed.splice(pos, 1); fb.innerHTML = ''; draw(); };
+          li.appendChild(b); placedEl.appendChild(li);
+        });
+        pz.items.filter(it => !pz.placed.includes(it.k)).forEach(it => {
+          const li = document.createElement('li');
+          const b = document.createElement('button'); b.type = 'button'; b.className = 'stepbtn';
+          b.innerHTML = '<span></span>'; b.lastChild.innerHTML = it.text; b.setAttribute('aria-label', 'Add step: ' + it.text.replace(/<[^>]+>/g, ''));
+          b.disabled = pz.solved;
+          b.onclick = () => { pz.placed.push(it.k); fb.innerHTML = ''; draw(); };
+          li.appendChild(b); poolEl.appendChild(li);
+        });
+        placedEl.classList.toggle('solved', pz.solved);
+      };
+      root.querySelector('.rst').onclick = () => { pz.placed = []; pz.solved = false; fb.innerHTML = ''; draw(); };
+      root.querySelector('.chk').onclick = () => {
+        const res = checkPuzzle(pz);
+        fb.innerHTML = `<div class="feedback ${res.ok ? 'right' : 'wrong'}">${res.msg}</div>`;
+        if (res.ok) { pz.solved = true; draw({ ind: res.ind }); } else draw({ bad: res.badPos });
+      };
+      draw();
+    });
+  }
+  // greedy matching: identical texts are interchangeable copies
+  function checkPuzzle(pz) {
+    const used = new Set(), placedLineIds = [], ind = [];
+    for (let pos = 0; pos < pz.placed.length; pos++) {
+      const it = pz.items.find(x => x.k === pz.placed[pos]);
+      if (!it.real) return { ok: false, badPos: pos, msg: `Step ${pos + 1} is not a valid inference. ${it.why}` };
+      const cands = pz.lines.filter(l => l.h === it.text && !used.has(l.id));
+      const okC = cands.find(l => l.prereq.every(p => used.has(p)));
+      if (!okC) {
+        const c = cands[0];
+        const missing = c ? c.prereq.filter(p => !used.has(p)).map(p => pz.lines[p]) : [];
+        const m = missing[0];
+        let why = '';
+        if (m) {
+          if (m.kind === 'intro') why = ' It needs to come after the step that introduces <i>v</i>.';
+          else if (m.kind === 'case') why = ' It belongs under “' + m.h.replace(/\.$/, '') + '”.';
+          else why = ' It relies on “' + m.h + '”, which hasn’t been established yet.';
+        }
+        return { ok: false, badPos: pos, msg: `Step ${pos + 1} can’t come here yet.${why}` };
+      }
+      used.add(okC.id); placedLineIds.push(okC.id); ind.push(okC.ind);
+    }
+    const left = pz.lines.length - used.size;
+    if (left) return { ok: false, badPos: -1, msg: pz.placed.length ? `So far so good, but the proof isn’t finished yet: ${left} more step${left > 1 ? 's are' : ' is'} needed.` : 'Add some steps first.' };
+    return { ok: true, msg: 'Correct: that’s a complete proof.', ind };
+  }
+
+  // ---------- counterexample builder ----------
+  function showBuilder() {
+    const q = state.q, slot = $('#taskSlot');
+    const letters = R.lettersUsed(q), comps = R.components(q);
+    let focusEl = null;
+    slot.innerHTML = `<div class="panel">
+      <h3>Build a counterexample</h3>
+      <div class="box">
+        <h4>1. Choose a statement for each letter</h4>
+        <div class="letters">${letters.map(i => `<label for="inst-${i}">${R.NAMES_H[i]} =</label><input type="text" id="inst-${i}" autocomplete="off" spellcheck="false" placeholder="e.g. (A ∧ B)"><div class="parsed" id="parsed-${i}"></div>`).join('')}</div>
+        <div class="pad" id="ipad"></div>
+      </div>
+      <div class="box">
+        <h4>2. Which of these validity claims hold for your statements?</h4>
+        <p class="p-note">For each one that fails, set a valuation on which its premises are true and its conclusion false.</p>
+        <ol class="comps">${comps.map((e, k) => `<li class="comp" id="comp-${k}"><span class="ent">(${'abcdef'[k]})&nbsp; ${R.entH(e)}</span><span class="inst" id="cinst-${k}"></span>
+          <div class="choice" role="radiogroup" aria-label="Does (${'abcdef'[k]}) hold?"><label><input type="radio" name="c${k}" id="c${k}-h" value="h"> Holds</label><label><input type="radio" name="c${k}" id="c${k}-f" value="f"> Fails</label></div>
+          <div class="valuation" id="val-${k}" hidden></div><div class="cfb" id="cfb-${k}"></div></li>`).join('')}</ol>
+      </div>
+      <div><button class="btn btn-primary" type="button" id="checkCx">Check my counterexample</button></div>
+      <div id="cxResult"></div>
+    </div>`;
+    makePad($('#ipad'), () => focusEl || document.getElementById('inst-' + letters[0]));
+    const vals = comps.map(() => ({ A: true, B: true, C: true }));
+    const parsedNow = () => {
+      const inst = [], errs = {};
+      letters.forEach(i => { const src = document.getElementById('inst-' + i).value; try { inst[i] = E.parseStudent(src); } catch (e) { errs[i] = e.message; } });
+      return { inst, errs };
+    };
+    const atomsNow = inst => { const s = new Set(); letters.forEach(i => inst[i] && E.atomsOf(inst[i], s)); const a = [...s].sort(); return a.length ? a : ['A']; };
+    const refresh = () => {
+      const { inst, errs } = parsedNow();
+      letters.forEach(i => {
+        const el = document.getElementById('parsed-' + i), src = document.getElementById('inst-' + i).value.trim();
+        if (!src) { el.textContent = ''; el.className = 'parsed'; }
+        else if (errs[i]) { el.textContent = errs[i]; el.className = 'parsed err'; }
+        else { el.innerHTML = 'Reads as ' + R.fH(inst[i]); el.className = 'parsed'; }
+      });
+      const allOk = letters.every(i => inst[i]);
+      const atoms = atomsNow(inst);
+      comps.forEach((e, k) => {
+        const map = {}; letters.forEach(i => (map[i] = inst[i]));
+        document.getElementById('cinst-' + k).innerHTML = allOk ? 'With your statements: ' + R.entH({ prem: e.prem.map(p => E.subst(p, map)), concl: E.subst(e.concl, map), neg: false }) : '';
+        const vEl = document.getElementById('val-' + k);
+        const fails = document.getElementById('c' + k + '-f').checked;
+        vEl.hidden = !fails;
+        if (fails) {
+          vEl.innerHTML = '<span>Valuation:</span>' + atoms.map(a => `<button type="button" class="tvbtn" data-k="${k}" data-a="${a}" aria-pressed="${vals[k][a]}" aria-label="${a} is ${vals[k][a] ? 'true' : 'false'}; press to change"><i>${a}</i> = ${vals[k][a] ? 'T' : 'F'}</button>`).join('');
+          vEl.querySelectorAll('.tvbtn').forEach(b => b.onclick = () => { vals[k][b.dataset.a] = !vals[k][b.dataset.a]; clearMarks(); refresh(); });
+        }
+      });
+    };
+    const clearMarks = () => { comps.forEach((_, k) => { document.getElementById('comp-' + k).className = 'comp'; document.getElementById('cfb-' + k).innerHTML = ''; }); $('#cxResult').innerHTML = ''; };
+    letters.forEach(i => { const el = document.getElementById('inst-' + i); el.addEventListener('focus', () => (focusEl = el)); el.addEventListener('input', () => { clearMarks(); refresh(); }); });
+    comps.forEach((_, k) => ['h', 'f'].forEach(v => document.getElementById('c' + k + '-' + v).addEventListener('change', () => { clearMarks(); refresh(); })));
+    refresh();
+    $('#checkCx').onclick = () => {
+      const { inst, errs } = parsedNow();
+      if (letters.some(i => !inst[i])) { $('#cxResult').innerHTML = '<div class="feedback wrong">First give a well-formed statement for every letter.</div>'; return; }
+      const atoms = atomsNow(inst);
+      let allRight = true;
+      const truth = comps.map((e, k) => {
+        const r = E.checkInstance(e, inst, atoms);
+        const said = document.getElementById('c' + k + '-h').checked ? 'h' : document.getElementById('c' + k + '-f').checked ? 'f' : null;
+        const box = document.getElementById('comp-' + k), out = document.getElementById('cfb-' + k);
+        let ok = false, msg;
+        const premNames = listAnd(e.prem.map(R.fH)), cn = R.fH(e.concl);
+        if (!said) msg = 'Say whether this holds.';
+        else if (said === 'h') {
+          if (r.holds) { ok = true; msg = 'Right: this holds.'; }
+          else msg = 'This doesn’t hold: on the valuation ' + R.valH(r.witness) + ', ' + (e.prem.length ? premNames + (e.prem.length > 1 ? ' are' : ' is') + ' true and ' : '') + cn + ' is false.';
+        } else {
+          const env = {}; atoms.forEach(a => (env[a] = vals[k][a]));
+          const pv = r.prem.map(p => E.evalF(p, env)), cv = E.evalF(r.concl, env);
+          if (pv.every(Boolean) && !cv) { ok = true; msg = 'Right: on your valuation ' + (e.prem.length ? premNames + (e.prem.length > 1 ? ' are' : ' is') + ' true and ' : '') + cn + ' is false.'; }
+          else if (r.holds) msg = 'This actually holds for your statements, so no valuation can show that it fails.';
+          else { const bad = e.prem.filter((_, j) => !pv[j]).map(R.fH); msg = 'Your valuation doesn’t show this: on it, ' + (bad.length ? listAnd(bad) + (bad.length > 1 ? ' are' : ' is') + ' false' : cn + ' is true') + '. Try another valuation.'; }
+        }
+        if (!ok) allRight = false;
+        box.className = 'comp ' + (ok ? 'ok' : 'no');
+        out.className = 'cfb ' + (ok ? 'ok' : 'no'); out.innerHTML = (ok ? '✓ ' : '✗ ') + msg;
+        return r.holds;
+      });
+      const ex = R.explainInstance(q, inst, atoms);
+      let msg;
+      if (ex.claimTrue) msg = '<div class="feedback wrong">' + R.metaVerdictH(q, ex) + ' Try different statements.</div>';
+      else if (!allRight) msg = '<div class="feedback wrong">Your statements do make the claim false, which is the main thing. Now fix the items marked ✗.</div>';
+      else msg = '<div class="feedback right">That is a counterexample. ' + R.metaVerdictH(q, ex) + '</div>';
+      $('#cxResult').innerHTML = msg;
+    };
+  }
+
+  // ---------- model answer ----------
+  function showModel() {
+    const q = state.q, slot = $('#modelSlot');
+    if (slot.dataset.shown) { slot.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+    slot.dataset.shown = '1';
+    $('#reveal').hidden = true;
+    let body;
+    if (q.valid) {
+      const pm = R.proofModel(q);
+      body = '<div class="proof">' + pm.blocks.map(b =>
+        b.head.map(h => (h.title ? `<div class="ttl">${h.title}</div>` : `<div>${h.h}</div>`)).join('') +
+        b.subs.map(s => (s.lead ? `<div class="ttl">${s.lead}</div>` : '') + '<ol>' + s.lines.map(l => `<li class="ind${Math.min(4, l.ind)} ${l.kind}">${l.h}</li>`).join('') + '</ol>').join('')
+      ).join('') + `<div class="close">${pm.close}</div></div>`;
+    } else {
+      const inst = q.instance, letters = R.lettersUsed(q);
+      const ex = R.explainInstance(q, inst.forms, inst.atoms);
+      const cols = R.tableCols(q);
+      const map = {}; letters.forEach(i => (map[i] = inst.forms[i]));
+      const witRows = new Set(ex.comps.filter(c => !c.r.holds).map(c => JSON.stringify(c.r.witness)));
+      const rowsH = E.rows(inst.atoms).map(env => `<tr class="${witRows.has(JSON.stringify(env)) ? 'wit' : ''}">${inst.atoms.map(a => `<td>${env[a] ? 'T' : 'F'}</td>`).join('')}${cols.map((f, j) => { const v = E.evalF(E.subst(f, map), env); return `<td class="${j === 0 ? 'sep' : ''}${v ? '' : ' f'}">${v ? 'T' : 'F'}</td>`; }).join('')}</tr>`).join('');
+      const head = `<tr>${inst.atoms.map(a => `<th><i>${a}</i></th>`).join('')}${cols.map((f, j) => `<th class="${j === 0 ? 'sep' : ''}">${R.fH(f)}${f.t === 'var' ? '' : ''}</th>`).join('')}</tr>`;
+      body = `<p class="p-note">The claim fails for these statements:</p>
+        <div class="inst-list">${letters.map(i => `<span>${R.NAMES_H[i]} = ${R.fH(inst.forms[i])}</span>`).join('')}</div>
+        <div class="box"><h4>The validity claims involved</h4><ul class="complist">${ex.comps.map((c, k) => `<li><span class="mk ${c.r.holds ? 'h' : 'f'}">${c.r.holds ? '✓' : '✗'}</span><span class="e">(${'abcdef'[k]})&nbsp; ${R.entH(c.e)}</span><span class="r">${R.compReason(c, inst.forms, inst.atoms)}</span></li>`).join('')}</ul>
+        <p style="margin:0;font-weight:600">${R.metaVerdictH(q, ex)}</p></div>
+        <div class="box"><h4>Truth table</h4><p class="p-note">Each row is a valuation. Shaded rows are the valuations that show a validity claim fails.</p><div class="tablewrap"><table class="tt">${head}${rowsH}</table></div></div>
+        <p class="p-note">Other counterexamples are possible.</p>`;
+    }
+    slot.innerHTML = `<div class="panel"><div class="row"><h3>Model answer</h3><span class="verdict ${q.valid ? 'yes' : 'no'}">${q.valid ? 'It holds' : 'It doesn’t hold'}</span></div>${body}</div>`;
+    if (!$('#taskSlot').innerHTML) { if (q.valid) showPuzzles(); else showBuilder(); }
+  }
+
+  document.querySelectorAll('.settings input').forEach(i => i.addEventListener('change', newQuestion));
+  updateScore();
+  newQuestion();
+})();
+</script>
+
+</body>
+</html>
